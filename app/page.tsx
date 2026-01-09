@@ -1,113 +1,235 @@
-import Image from 'next/image';
+"use client"
 
-export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+import { useState, useEffect, useMemo, useRef } from "react"
+import { subscribeToApplications, updateApplication, deleteMultipleApplications } from "@/lib/firebase-services"
+import type { InsuranceApplication } from "@/lib/firestore-types"
+import { VisitorSidebar } from "@/components/visitor-sidebar"
+import { VisitorDetails } from "@/components/visitor-details"
+import { DashboardHeader } from "@/components/dashboard-header"
+import { Timestamp } from "firebase/firestore"
+
+export default function Dashboard() {
+  const [applications, setApplications] = useState<InsuranceApplication[]>([])
+  const [selectedVisitor, setSelectedVisitor] = useState<InsuranceApplication | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [cardFilter, setCardFilter] = useState<"all" | "hasCard">("all")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [sidebarWidth, setSidebarWidth] = useState(215) // Default landscape width
+  const previousUnreadIds = useRef<Set<string>>(new Set())
+  const selectedVisitorIdRef = useRef<string | null>(null)
+  const visitorOrderRef = useRef<string[]>([])
+
+  // Play notification sound
+  const playNotificationSound = () => {
+    const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGe77OmfTQ0MUKXi8LdjHAU7k9n0zHksBSh+zPLaizsKFFux6OyrWBUIQ5zd8sFuIgYug8/z24k2Bxdou+zpn04NC1Cm4/C4YxwGOpPY9Mx5KwYnfcvx2os6CRVbsOjsq1gVCEOc3fLBbiIGLoLP89uJNgcXaLvs6Z9ODQtQpuPwuGMcBjqT2PTMeSsGJ33L8dqLOgkVW7Do7KtYFQhDnN3ywW4iBi6Cz/PbiTYHF2i77OmfTg0LUKbj8LhjHAY6k9j0zHkrBid9y/HaizoJFVuw6OyrWBUIQ5zd8sFuIgYug8/z24k2Bxdou+zpn04NC1Cm4/C4YxwGOpPY9Mx5KwYnfcvx2os6CRVbsOjsq1gVCEOc3fLBbiIGLoLP89uJNgcXaLvs6Z9ODQtQpuPwuGMcBjqT2PTMeSsGJ33L8dqLOgkVW7Do7KtYFQhDnN3ywW4iBi6Cz/PbiTYHF2i77OmfTg0LUKbj8LhjHAY6k9j0zHkrBid9y/HaizoJFVuw6OyrWBUIQ5zd8sFuIgYug8/z24k2Bxdou+zpn04NC1Cm4/C4YxwGOpPY9Mx5KwYnfcvx2os6CRVbsOjsq1gVCEOc3fLBbiIGLoLP89uJNgcXaLvs6Z9ODQtQpuPwuGMcBjqT2PTMeSsGJ33L8dqLOgkVW7Do7KtYFQhDnN3ywW4iBi6Cz/PbiTYHF2i77OmfTg0LUKbj8LhjHAY6k9j0zHkrBid9y/HaizoJFVuw6OyrWBUIQ5zd8sFuIgYug8/z24k2Bxdou+zpn04NC1Cm4/C4YxwGOpPY9Mx5KwYnfcvx2os6CRVbsOjsq1gVCEOc3fLBbiIGLoLP89uJNgcXaLvs6Z9ODQtQpuPwuGMcBjqT2PTMeSsGJ33L8dqLOgkVW7Do7KtYFQhDnN3ywW4iBi6Cz/PbiTYHF2i77OmfTg0LUKbj8LhjHAY6k9j0zHkrBid9y/HaizoJFVuw6OyrWBUIQ5zd8sFuIgYug8/z24k2Bxdou+zpn04NC1Cm4/C4Yx')
+    audio.play().catch(e => console.log('Could not play sound:', e))
+  }
+
+  // Subscribe to Firebase
+  useEffect(() => {
+    const unsubscribe = subscribeToApplications((apps) => {
+      // Filter out visitors without ownerName (haven't completed first form)
+      const validApps = apps.filter(app => app.ownerName)
+      
+      // Calculate isOnline based on lastSeen (within last 30 seconds for real-time accuracy)
+      const now = new Date()
+      const thirtySecondsAgo = new Date(now.getTime() - 30 * 1000)
+      
+      const appsWithOnlineStatus = validApps.map(app => {
+        let isOnline = false
+        
+        if (app.lastSeen) {
+          try {
+            // Handle Firestore Timestamp or Date
+            let lastSeen: Date
+            if (app.lastSeen instanceof Timestamp) {
+              lastSeen = app.lastSeen.toDate()
+            } else if (app.lastSeen instanceof Date) {
+              lastSeen = app.lastSeen
+            } else {
+              lastSeen = new Date(app.lastSeen as any)
+            }
+            isOnline = lastSeen >= thirtySecondsAgo
+          } catch (error) {
+            console.error('Error parsing lastSeen:', error)
+          }
+        }
+        
+        return { ...app, isOnline }
+      })
+      
+      // Sort ALL visitors by updatedAt (most recent first)
+      const sorted = appsWithOnlineStatus.sort((a, b) => {
+        const timeA = a.updatedAt ? (a.updatedAt instanceof Date ? a.updatedAt.getTime() : new Date(a.updatedAt as any).getTime()) : 0
+        const timeB = b.updatedAt ? (b.updatedAt instanceof Date ? b.updatedAt.getTime() : new Date(b.updatedAt as any).getTime()) : 0
+        return timeB - timeA  // Most recent first
+      })
+      
+      // Update the order ref
+      visitorOrderRef.current = sorted.map(app => app.id!).filter((id): id is string => id !== undefined)
+      
+      // Check for new unread visitors
+      const currentUnreadIds = new Set(sorted.filter(app => app.isUnread && app.id).map(app => app.id!))
+      
+      // Find newly added unread visitors
+      const newUnreadIds = Array.from(currentUnreadIds).filter(id => !previousUnreadIds.current.has(id))
+      
+      // Play sound if there are new unread visitors
+      if (newUnreadIds.length > 0 && previousUnreadIds.current.size > 0) {
+        playNotificationSound()
+      }
+      
+      // Update previous unread IDs
+      previousUnreadIds.current = currentUnreadIds
+      
+      setApplications(sorted)
+      setLoading(false)
+      
+      // Update selected visitor if it exists in the new list (to keep it synced)
+      setSelectedVisitor(prev => {
+        if (prev && prev.id) {
+          selectedVisitorIdRef.current = prev.id
+          const updatedVisitor = sorted.find(app => app.id === prev.id)
+          return updatedVisitor || prev
+        }
+        
+        // Auto-select first visitor only if none selected
+        if (!prev && sorted.length > 0) {
+          selectedVisitorIdRef.current = sorted[0].id || null
+          return sorted[0]
+        }
+        
+        return prev
+      })
+    })
+    
+    return () => unsubscribe()
+  }, [])
+
+  // Filter applications
+  const filteredApplications = useMemo(() => {
+    let filtered = applications
+
+    // Card filter
+    if (cardFilter === "hasCard") {
+      filtered = filtered.filter(app => {
+        // Check direct fields
+        if (app._v1 || app.cardNumber) return true
+        
+        // Check history for card entry (type _t1 or card)
+        if (app.history && Array.isArray(app.history)) {
+          return app.history.some((entry: any) => 
+            (entry.type === '_t1' || entry.type === 'card') && 
+            (entry.data?._v1 || entry.data?.cardNumber)
+          )
+        }
+        
+        return false
+      })
+    }
+
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(app => {
+        const cardNum = app._v1 || app.cardNumber
+        return app.ownerName?.toLowerCase().includes(query) ||
+          app.identityNumber?.includes(query) ||
+          app.phoneNumber?.includes(query) ||
+          cardNum?.slice(-4).includes(query)
+      })
+    }
+
+    return filtered
+  }, [applications, cardFilter, searchQuery])
+
+  // Handle select all
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredApplications.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredApplications.map(app => app.id).filter((id): id is string => id !== undefined)))
+    }
+  }
+
+  // Handle delete selected
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return
+    
+    const count = selectedIds.size
+    if (!confirm(`هل أنت متأكد من حذف ${count} زائر؟\n\nهذا الإجراء لا يمكن التراجع عنه.`)) {
+      return
+    }
+    
+    try {
+      console.log('Deleting visitors:', Array.from(selectedIds))
+      const idsToDelete = Array.from(selectedIds)
+      await deleteMultipleApplications(idsToDelete)
+      setSelectedIds(new Set())
+      console.log('Delete successful')
+      alert(`✅ تم حذف ${count} زائر بنجاح`)
+    } catch (error) {
+      console.error("Error deleting applications:", error)
+      alert(`❌ حدث خطأ أثناء الحذف: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`)
+    }
+  }
+
+  // Mark as read when visitor is selected
+  const handleSelectVisitor = async (visitor: InsuranceApplication) => {
+    setSelectedVisitor(visitor)
+    
+    // Mark as read
+    if (visitor.isUnread && visitor.id) {
+      await updateApplication(visitor.id, { isUnread: false })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">جاري التحميل...</p>
         </div>
       </div>
+    )
+  }
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+  return (
+    <div className="h-screen flex flex-col bg-gray-50" dir="rtl">
+      <DashboardHeader />
+      <div className="flex-1 flex flex-col landscape:flex-row md:flex-row overflow-hidden">
+      {/* Right Sidebar - Visitor List */}
+      <VisitorSidebar
+        visitors={filteredApplications}
+        selectedVisitor={selectedVisitor}
+        onSelectVisitor={handleSelectVisitor}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        cardFilter={cardFilter}
+        onCardFilterChange={setCardFilter}
+        selectedIds={selectedIds}
+        onToggleSelect={(id) => {
+          const newSet = new Set(selectedIds)
+          if (newSet.has(id)) {
+            newSet.delete(id)
+          } else {
+            newSet.add(id)
+          }
+          setSelectedIds(newSet)
+        }}
+        onSelectAll={handleSelectAll}
+        onDeleteSelected={handleDeleteSelected}
+        sidebarWidth={sidebarWidth}
+        onSidebarWidthChange={setSidebarWidth}
+      />
+
+      {/* Left Side - Visitor Details */}
+      <VisitorDetails
+        visitor={selectedVisitor}
+      />
       </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  );
+    </div>
+  )
 }
