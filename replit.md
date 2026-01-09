@@ -6,7 +6,7 @@ A Next.js dashboard application with Firebase integration for real-time data man
 ## Tech Stack
 - **Framework**: Next.js 15.5.x
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS 4 with tailwindcss-animate
+- **Styling**: Tailwind CSS 3.4 with tailwindcss-animate
 - **Database**: Firebase/Firestore
 - **Authentication**: Firebase Auth
 - **Analytics**: Google Analytics Data API
@@ -36,11 +36,12 @@ lib/
 
 ## Configuration
 - Next.js configured with `allowedDevOrigins` for Replit proxy support
-- PostCSS configured with `@tailwindcss/postcss` for Tailwind 4
+- PostCSS configured with tailwindcss and autoprefixer
 
 ## Recent Changes
 - 2026-01-09: Initial Replit setup
   - Downgraded Next.js 16 to 15 for better stability (Turbopack compatibility)
+  - Downgraded Tailwind CSS 4 to 3.4 for compatibility with existing config
   - Removed duplicate config files (next.config.js, postcss.config.js)
   - Added tailwindcss-animate package
   - Configured allowedDevOrigins for Replit proxy
